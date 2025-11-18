@@ -1,16 +1,16 @@
-﻿using MoviesApi.Models.Dtos;
-using UserApi.Models;
+﻿using MoviesApi.Models;
+using MoviesApi.Models.Dtos;
 using UserApi.Models.Dtos;
 
 namespace MoviesApi.Repository.IRepository
 {
     public interface IUserRepository
     {
-        ICollection<User> GetUsers();
-        User GetUser(int id);
+        ICollection<AppUser> GetUsers();
+        AppUser GetUser(string id);
         bool IsUniqueUserName(string userName);
         Task<UserLoginAnswerDto> Login(UserLoginDto userLoginDto);
-        Task<User> Register(UserRegisterDto userRegistrationDto);
+        Task<UserDataDto> Register(UserRegisterDto userRegistrationDto);
         bool Save();
     }
 }

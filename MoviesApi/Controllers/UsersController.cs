@@ -1,10 +1,6 @@
 ﻿using AutoMapper;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using MoviesApi.Models.Dtos;
-using MoviesApi.Repository;
 using MoviesApi.Repository.IRepository;
-using System.Net;
 using UserApi.Models.Dtos;
 
 namespace MoviesApi.Controllers
@@ -46,7 +42,7 @@ namespace MoviesApi.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public IActionResult GetUser(int id)
+        public IActionResult GetUser(string id)
         {
             var itemUser = _userRepository.GetUser(id);
 
@@ -66,19 +62,28 @@ namespace MoviesApi.Controllers
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public async Task<IActionResult> Register([FromBody] UserRegisterDto userRegisterDto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
             bool validateUniqueUsername = _userRepository.IsUniqueUserName(userRegisterDto.UserName);
+
             if (!validateUniqueUsername)
-            {
-                return BadRequest(ModelState);
-            }
+                return BadRequest("El nombre de usuario ya existe");
 
-            var usuario = await _userRepository.Register(userRegisterDto);
-            if (usuario == null)
+            try
             {
-                return BadRequest(ModelState);
-            }
+                var usuario = await _userRepository.Register(userRegisterDto);
 
-            return Ok(HttpStatusCode.OK);
+                if (usuario == null)
+                    return StatusCode(StatusCodes.Status500InternalServerError,
+                        "Ocurrió un error al crear el usuario");
+
+                return Created("api/users/" + usuario.Id, usuario);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
 
         }
 
@@ -90,6 +95,7 @@ namespace MoviesApi.Controllers
         {
 
             var answerLogin = await _userRepository.Login(userLoginDto);
+            Console.WriteLine($"answerLogin: {answerLogin}");
 
             if (answerLogin.User == null || string.IsNullOrEmpty(answerLogin.Token))
             {

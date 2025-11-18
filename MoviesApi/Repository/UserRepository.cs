@@ -1,4 +1,6 @@
-﻿using Microsoft.IdentityModel.Tokens;
+﻿using AutoMapper;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Tokens;
 using MoviesApi.Data;
 using MoviesApi.Models;
 using MoviesApi.Models.Dtos;
@@ -17,39 +19,48 @@ namespace MoviesApi.Repository
     {
         private readonly Context _db;
         private string secretKey;
+        private readonly UserManager<AppUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IMapper _mapper;
 
-        public UserRepository(Context db, IConfiguration config)
+        public UserRepository(Context db, IConfiguration config, UserManager<AppUser> userManager, RoleManager<IdentityRole> roleManager, IMapper mapper)
         {
             _db = db;
             secretKey = config.GetValue<string>("ApiSettings:Secret");
+            _userManager = userManager;
+            _roleManager = roleManager;
+            _mapper = mapper;
         }
 
 
-        public ICollection<User> GetUsers()
+        public ICollection<AppUser> GetUsers()
         {
             return _db.Users.OrderBy(u => u.Name).ToList();
         }
 
-        public User GetUser(int id)
+        public AppUser GetUser(string id)
         {
             return _db.Users.FirstOrDefault(u => u.Id == id);
         }
 
         public bool IsUniqueUserName(string userName)
         {
-            return !_db.Users.Any(u => u.UserName== userName);
+            return !_db.AppUsers.Any(u => u.UserName== userName);
         }
 
         public async Task<UserLoginAnswerDto> Login(UserLoginDto userLoginDto)
         {
-            var passwordEncrypted = getMd5(userLoginDto.Password);
-
-            var user = _db.Users.FirstOrDefault(
+            var user = _db.AppUsers.FirstOrDefault(
                 u => u.UserName.ToLower() == userLoginDto.UserName.ToLower()
-                && u.Password == passwordEncrypted
-                );
+            );
 
-            if (user == null)
+            
+            Console.WriteLine($"user: {user}");
+
+            bool isValid = await _userManager.CheckPasswordAsync(user, userLoginDto.Password);
+
+            Console.WriteLine($"isValid: {isValid}");
+            if (user == null || isValid == false)
             {
                 return await Task.FromResult(new UserLoginAnswerDto()
                 {
@@ -59,6 +70,7 @@ namespace MoviesApi.Repository
                 });
             }
 
+            var roles = await _userManager.GetRolesAsync(user);
             var handleToken = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(secretKey);
 
@@ -67,7 +79,7 @@ namespace MoviesApi.Repository
                 Subject = new ClaimsIdentity(new Claim[]
                 {
                     new Claim(ClaimTypes.Name, user.UserName.ToString()),
-                    new Claim(ClaimTypes.Role, user.Role)
+                    new Claim(ClaimTypes.Role, roles.FirstOrDefault())
                 }),
                 Expires = DateTime.UtcNow.AddDays(7),
                 SigningCredentials = new(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
@@ -78,38 +90,49 @@ namespace MoviesApi.Repository
             UserLoginAnswerDto userLoginAnswerDto = new UserLoginAnswerDto()
             {
                 Token = handleToken.WriteToken(token),
-                User = new UserDataDto
-                {
-                    Id = user.Id,
-                    UserName = user.UserName,
-                    Name = user.Name
-                },
-                Role = user.Role
+                User = _mapper.Map<UserDataDto>(user),
             };
 
             return userLoginAnswerDto;
         }
 
-        public async Task<User> Register(UserRegisterDto userRegisterDto)
+        public async Task<UserDataDto> Register(UserRegisterDto userRegisterDto)
         {
-            var passwordEncrypted = getMd5(userRegisterDto.Password);
+            //var passwordEncrypted = getMd5(userRegisterDto.Password);
 
-            User user = new User()
+            AppUser user = new AppUser()
             {
                 UserName = userRegisterDto.UserName,
-                Password = passwordEncrypted,
-                Name = userRegisterDto.UserName,
-                Role = userRegisterDto.Role
+                Email = userRegisterDto.UserName,
+                NormalizedEmail = userRegisterDto.UserName.ToUpper(),
+                Name = userRegisterDto.Name
             };
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
-            user.Password = passwordEncrypted;
-            return user;
+            var result = await _userManager.CreateAsync(user, userRegisterDto.Password);
+            if(result.Succeeded)
+            {
+                if (!_roleManager.RoleExistsAsync("Admin").GetAwaiter().GetResult())
+                {
+                    await _roleManager.CreateAsync(new IdentityRole("Admin"));
+                    await _roleManager.CreateAsync(new IdentityRole("Registered"));
+                }
+
+                await _userManager.AddToRoleAsync(user, "Admin");
+                //var userRetornado = _db.AppUsers.FirstOrDefault(u => u.UserName == userRegisterDto.UserName);
+
+                return _mapper.Map<UserDataDto>(user);
+            }
+
+            var errors = result.Errors.Select(e => e.Description);
+            throw new Exception(string.Join(" | ", errors));
+            //_db.Users.Add(user);
+            //await _db.SaveChangesAsync();
+            //user.Password = passwordEncrypted;
+            return null;
         }
 
         //Método para encriptar contraseña con MD5 se usa tanto en el Acceso como en el Registro
-        public static string getMd5(string valor)
+        /*public static string getMd5(string valor)
         {
             MD5CryptoServiceProvider x = new MD5CryptoServiceProvider();
             byte[] data = System.Text.Encoding.UTF8.GetBytes(valor);
@@ -118,7 +141,7 @@ namespace MoviesApi.Repository
             for (int i = 0; i < data.Length; i++)
                 resp += data[i].ToString("x2").ToLower();
             return resp;
-        }
+        }*/
 
         public bool Save()
         {

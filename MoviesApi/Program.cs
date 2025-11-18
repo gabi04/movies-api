@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using MoviesApi.Data;
+using MoviesApi.Models;
 using MoviesApi.MoviesMappers;
 using MoviesApi.Repository;
 using MoviesApi.Repository.IRepository;
@@ -15,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<Context>(opciones =>
                 opciones.UseSqlServer(builder.Configuration.GetConnectionString("ConexionSql")));
 
-builder.Services.AddIdentity<IdentityUser, IdentityRole>().AddEntityFrameworkStores<Context>();
+builder.Services.AddIdentity<AppUser, IdentityRole>().AddEntityFrameworkStores<Context>();
 
 
 builder.Services.AddControllers();
