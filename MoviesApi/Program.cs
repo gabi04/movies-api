@@ -1,14 +1,17 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using MoviesApi.Data;
 using MoviesApi.Models;
+using MoviesApi.Models.Dtos;
 using MoviesApi.MoviesMappers;
 using MoviesApi.Repository;
 using MoviesApi.Repository.IRepository;
 using System.Text;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,32 +22,41 @@ builder.Services.AddDbContext<Context>(opciones =>
 builder.Services.AddIdentity<AppUser, IdentityRole>().AddEntityFrameworkStores<Context>();
 
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
 
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
+
 builder.Services.AddSwaggerGen(options =>
 {
+    // 🔐 Configuración de seguridad (la que ya tienes)
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description =
-        "Authentication JWT using shequema Bearer. \r\n\r\n " +
-        "Ingresa la palabra 'Bearer' seguida de un [espacio] y despues su token en el campo de abajo \r\n\r\n" +
-        "Ejemplo: \"Bearer tkdknkdllskd\"",
+        "Authentication JWT using schema Bearer.\r\n\r\n" +
+        "Ingresa la palabra 'Bearer' seguida de un [espacio] y después tu token.\r\n\r\n" +
+        "Ejemplo: \"Bearer xxxxxxx\"",
         Name = "Authorization",
         In = ParameterLocation.Header,
-        Scheme = "Bearer"
+        Scheme = "Bearer",
+        Type = SecuritySchemeType.ApiKey
     });
+
     options.AddSecurityRequirement(new OpenApiSecurityRequirement()
     {
         {
             new OpenApiSecurityScheme
             {
                 Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.SecurityScheme,
-                                Id = "Bearer"
-                            },
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                },
                 Scheme = "oauth2",
                 Name = "Bearer",
                 In = ParameterLocation.Header
@@ -52,7 +64,17 @@ builder.Services.AddSwaggerGen(options =>
             new List<string>()
         }
     });
+
+    // ✅ 👇 Agregar esta parte para que Swagger muestre ENUMS como texto
+    options.MapType<CreateMovieDto.ClasificationType>(() => new OpenApiSchema
+    {
+        Type = "string",
+        Enum = Enum.GetNames(typeof(CreateMovieDto.ClasificationType))
+            .Select(name => new OpenApiString(name))
+            .ToList<IOpenApiAny>()
+    });
 });
+
 
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<IMovieRepository, MovieRepository>();
@@ -93,6 +115,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseStaticFiles();
 app.UseHttpsRedirection();
 
 app.UseAuthentication();
