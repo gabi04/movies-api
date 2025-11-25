@@ -11,7 +11,6 @@
         public IFormFile Image { get; set; }
         public enum ClasificationType { GeneralAudiences, ParentalGuidance, ParentsStronglyCautioned, Restricted, NoChildrenUnderSeventeen }
         public ClasificationType Clasification { get; set; }
-        public DateTime CreationDate { get; set; }
         public int categoryId { get; set; }        
     }
 }

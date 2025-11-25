@@ -120,18 +120,19 @@ namespace MoviesApi.Controllers
             return CreatedAtRoute("GetMovie", new { id = movie.Id }, movie);
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPatch("{id:int}", Name ="UpdateMoviePatch")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        public IActionResult UpdateMoviePatch(int id, [FromBody] MovieDto movieDto)
+        public IActionResult UpdateMoviePatch(int id, [FromForm] UpdataMovieDto updataMovieDto)
         {
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
             }
 
-            if (movieDto == null || id != movieDto.Id)
+            if (updataMovieDto == null || id != updataMovieDto.Id)
             {
                 return BadRequest(ModelState);
             }
@@ -142,17 +143,47 @@ namespace MoviesApi.Controllers
                 return NotFound($"Movie with ID {id} not found");
             }
 
-            var movie = _mapper.Map<Movie>(movieDto);
+            var movie = _mapper.Map<Movie>(updataMovieDto);
 
-            if (!_movieRepository.UpdateMovie(movie))
+            /*if (!_movieRepository.UpdateMovie(movie))
             {
                 ModelState.AddModelError("", $"Something went wrong updating the movie {movie.Name}");
                 return StatusCode(500, ModelState);
+            }*/
+
+            if (updataMovieDto.Image != null)
+            {
+                string fileName = movie.Id + System.Guid.NewGuid().ToString() + Path.GetExtension(updataMovieDto.Image.FileName);
+                string path = @"wwwroot\ImagesMovies\" + fileName;
+
+                var ubicacionDirectorio = Path.Combine(Directory.GetCurrentDirectory(), path);
+
+                FileInfo file = new FileInfo(ubicacionDirectorio);
+
+                if (file.Exists)
+                {
+                    file.Delete();
+                }
+
+                using (var fileStream = new FileStream(ubicacionDirectorio, FileMode.Create))
+                {
+                    updataMovieDto.Image.CopyTo(fileStream);
+                }
+
+                var baseUrl = $"{HttpContext.Request.Scheme}://{HttpContext.Request.Host.Value}{HttpContext.Request.PathBase.Value}";
+                movie.ImgPath = baseUrl + "/ImagesMovies/" + fileName;
+                movie.ImgLocalPath = path;
+            }
+            else
+            {
+                movie.ImgPath = "https://placehold.co/600x400";
             }
 
+            _movieRepository.UpdateMovie(movie);
             return NoContent();
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpPut("{id:int}", Name = "UpdateMoviePut")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -188,6 +219,7 @@ namespace MoviesApi.Controllers
             return NoContent();
         }
 
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{id:int}", Name = "DeleteMovie")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
