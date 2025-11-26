@@ -4,7 +4,8 @@ namespace MoviesApi.Repository.IRepository
 {
     public interface IMovieRepository
     {
-        ICollection<Movie> GetMovies();
+        ICollection<Movie> GetMovies(int pageNumber, int pageSize);
+        int GetTotalMovies();
         ICollection<Movie> GetMoviesByCategory(int categoryId);
         IEnumerable<Movie> SearchMovie(string name);
         Movie GetMovie(int id);

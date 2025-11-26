@@ -15,9 +15,16 @@ namespace MoviesApi.Repository
             _db = db;
         }
 
-        public ICollection<Movie> GetMovies()
+        public ICollection<Movie> GetMovies(int pageNumber, int pageSize)
         {
-            return _db.Movies.OrderBy(m => m.Name).ToList();
+            return _db.Movies.OrderBy(m => m.Name)
+                .Skip((pageNumber -1) * pageSize)
+                .Take(pageSize)
+                .ToList();
+        }
+        public int GetTotalMovies()
+        {
+            return _db.Movies.Count();
         }
         public ICollection<Movie> GetMoviesByCategory(int categoryId)
         {

@@ -25,17 +25,36 @@ namespace MoviesApi.Controllers
         [HttpGet]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public IActionResult GetMovies()
+        public IActionResult GetMovies([FromQuery] int pageNumber = 1, [FromQuery] int pageSize = 10)
         {
-            var moviesList = _movieRepository.GetMovies();
-            var moviesDtoList = new List<MovieDto>();
-
-            foreach (var list in moviesList)
+            try
             {
-                moviesDtoList.Add(_mapper.Map<MovieDto>(list));
-            }
+                var totalMovies = _movieRepository.GetTotalMovies();
+                var moviesList = _movieRepository.GetMovies(pageNumber, pageSize);
 
-            return Ok(moviesDtoList);
+                if (moviesList == null || !moviesList.Any())
+                {
+                    return NotFound("No se encontraron películas.");
+                }
+
+                var moviesDto = moviesList.Select(m => _mapper.Map<MovieDto>(m)).ToList();
+
+                var response = new
+                {
+                    PageNumber = pageNumber,
+                    PageSize = pageSize,
+                    TotalPages = (int)Math.Ceiling(totalMovies / (double)pageSize),
+                    TotalItems = totalMovies,
+                    Items = moviesDto
+                };
+
+                return Ok(response);
+            }
+            catch (Exception)
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error recuperando datos de la aplicación");
+            } 
+            
         }
 
         [HttpGet("{id:int}", Name="GetMovie")]
@@ -243,28 +262,37 @@ namespace MoviesApi.Controllers
             return NoContent();
         }
 
+        [AllowAnonymous]
         [HttpGet("GetMoviesByCategory/{categoryId:int}")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status500InternalServerError)]
         public IActionResult GetMoviesByCategory(int categoryId)
         {
-            var moviesList = _movieRepository.GetMoviesByCategory(categoryId);
-
-            if (moviesList == null)
+            try
             {
-                return NotFound();
-            }
+                var moviesList = _movieRepository.GetMoviesByCategory(categoryId);
 
-            var movieItem = new List<MovieDto>();
-            foreach (var movie in moviesList)
+                if (moviesList == null || !moviesList.Any())
+                {
+                    return NotFound($"No se encontraron películas en la categoría con ID {categoryId}.");
+                }
+
+                var movieItem = moviesList.Select(movie => _mapper.Map<MovieDto>(movie)).ToList();
+                /*foreach (var movie in moviesList)
+                {
+                    movieItem.Add(_mapper.Map<MovieDto>(movie));
+                }*/
+
+                return Ok(movieItem);
+            }
+            catch (Exception)
             {
-                movieItem.Add(_mapper.Map<MovieDto>(movie));
+                return StatusCode(StatusCodes.Status500InternalServerError, "rror recuperando datos de la aplicación");
             }
-
-            return Ok(movieItem);
         }
 
+        [AllowAnonymous]
         [HttpGet("Search")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -274,16 +302,15 @@ namespace MoviesApi.Controllers
             try
             {
                 var result = _movieRepository.SearchMovie(name);
-                if (result.Any())
+                if (!result.Any())
                 {
-                    return Ok(result);
+                    return NotFound($"No se encontraron películas que contengan {name} en su nombre ni en su descripción.");
                 }
-
-                return NotFound();
+                var movieDto = _mapper.Map<IEnumerable<MovieDto>>(result);
+                return Ok(movieDto);
             }
             catch (Exception)
             {
-
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error retrieving application data");
             }
         }
